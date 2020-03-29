@@ -1,14 +1,16 @@
 class TaskDefinitionError(SyntaxError):
-    def __init__(self, message=None, errors=None):
+    def __init__(self, task, message=None, errors=None):
         if not message:
             message = "Task must be defined inside the flow class."
+
+        message = f"Found invalid definition for task: {task.name}"
 
         super().__init__(message)
         self.errors = errors
 
 
-class TaskExecutionError(SyntaxError):
-    def __init__(self, message=None, errors=None):
+class TaskExecutionError(RuntimeError):
+    def __init__(self, task, message=None, errors=None):
         if not message:
             message = "Task must be executed as a staticmethod."
 

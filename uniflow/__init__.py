@@ -1,5 +1,5 @@
-from .uniflow import Uniflow as Flow
+from .core.uniflow import Uniflow
 
 __all__ = [
-    "Flow"
+    "Uniflow"
 ]

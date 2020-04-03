@@ -1,17 +1,28 @@
-from aws_cdk import core
-from ..stacks.core_stack import CoreStack
-from ..utils import methodsWithDecorator
+import logging
+
+from ..utils import get_methods_with_decorator, get_python_path
+
+logger = logging.getLogger(__name__)
 
 
-class Uniflow(core.App):
+class Uniflow(object):
 
-    def __init__(self):
+    def __init__(self) -> None:
+        from aws_cdk import core
+        from ..stacks.uniflow_stack import UniflowStack
+
+        """
+        aws_cdk depends on nodejs module aws-cdk, when we deploy we don't package node dependency as it is not required.
+        This code path is only executed during synthesis. By locally importing we avoid breaking the lambda function.  
+        """
+
         super().__init__()
         self.__unigraph = None
-        self.core_stack = CoreStack(self, "core-stack")
+        self.app = core.App()
+        self.stack = UniflowStack(self.app, "Uniflow")
 
     def __get_task_methods(self) -> object:
-        tasks = list(methodsWithDecorator(self.__class__, "task"))
+        tasks = list(get_methods_with_decorator(self.__class__, "task"))
         for task in tasks:
             yield getattr(self, task)
 
@@ -24,8 +35,22 @@ class Uniflow(core.App):
         self.__unigraph = Unigraph.from_tasks_list(tasks)
         self.__unigraph.build()
 
+    def __create_task_lambdas(self):
+        for node in self.__unigraph.nodes:
+            self.stack.add_lambda_for_task(get_python_path(self), node.name)
+
     def build(self) -> None:
         self.__build_graph()
+        self.__create_task_lambdas()
+
+    @staticmethod
+    def hello_world(event, context):
+        logging.info(event)
+        logging.info(context)
+        print("Hello World!")
+
+    def synth(self):
+        self.app.synth()
 
 
 if __name__ == "__main__":

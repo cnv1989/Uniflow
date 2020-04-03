@@ -20,6 +20,10 @@ class Unigraph(object):
             raise Exception(f"Already encountered node by name {node.name}")
         self.__nodes[node.name] = node
 
+    @property
+    def nodes(self):
+        return self.__nodes.values()
+
     def update_node_relationships(self):
         for key, node in self.__nodes.items():
             for parent_name in node.task.dependencies:

@@ -7,6 +7,8 @@ import urllib.request
 import tarfile
 import logging
 import shutil
+import json
+import importlib
 
 from pathlib import Path
 
@@ -24,26 +26,58 @@ def cli():
     pass
 
 
-@cli.command()
-def run():
-    pass
-
-
-def delete_build_dir_if_exists():
-    build_dir = Path.cwd().joinpath("cdk.out")
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
+def create_cdk_contex():
+    cdk_context = {
+        "@aws-cdk/core:enableStackNameDuplicates": "true",
+        "aws-cdk:enableDiffNoFail": "true"
+    }
+    cdk_context_json_path = Path.cwd().joinpath("cdk.context.json")
+    with open(cdk_context_json_path, "w") as file:
+        json.dump(cdk_context, file, indent=4)
 
 
 @cli.command()
 @click.argument('flow')
-def synth(flow):
-    delete_build_dir_if_exists()
+def build(flow):
+    click.echo(f"START: Building flow {flow}")
+    create_cdk_contex()
+    module_name, class_name = flow.rsplit(".", 1)
+    flow_module = importlib.import_module(module_name)
+    flow_class = getattr(flow_module, class_name)
+    flow_ob = flow_class()
+    flow_ob.build()
+    click.echo(f"FINISHED: Building flow {flow}")
+
+
+@cli.command()
+def synth():
+    click.echo("START: Synthesizing flow")
     process = subprocess.Popen(
-        ["cdk", "synth", "-a", f"'python -m {flow}'"],
+        ["cdk", "synth", "-a", "cdk.out"],
         cwd=os.getcwd()
     )
     process.wait()
+    click.echo("Finished: Synthesizing flow")
+
+
+@cli.command()
+def clean():
+    click.echo("START: Cleaning build directory.")
+    build_dir = Path.cwd().joinpath("cdk.out")
+    if build_dir.exists():
+        shutil.rmtree(build_dir)
+    click.echo("FINISHED: Cleaning build directory.")
+
+
+@cli.command()
+def deploy():
+    click.echo("START: Deploying flow.")
+    process = subprocess.Popen(
+        ["cdk", "deploy", "-a", "cdk.out"],
+        cwd=os.getcwd()
+    )
+    process.wait()
+    click.echo("FINISHED: Deploying flow.")
 
 
 def download_ddb_local():
@@ -57,22 +91,6 @@ def download_ddb_local():
 def start_ddb():
     process = subprocess.Popen(
         ["java",  f"-Djava.library.path={DDB_LOCAL_PATH }/DynamoDBLocal_lib",  "-jar", f"{DDB_LOCAL_PATH}/DynamoDBLocal.jar",  "-inMemory"]
-    )
-    process.wait()
-
-
-@cli.command()
-def setup_ddb_local():
-    pass
-
-
-@cli.command()
-@click.argument('flow')
-def deploy(flow):
-    delete_build_dir_if_exists()
-    process = subprocess.Popen(
-        ["cdk", "deploy", "-a", f"'python -m {flow}'"],
-        cwd=os.getcwd()
     )
     process.wait()
 

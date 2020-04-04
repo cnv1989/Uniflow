@@ -12,14 +12,15 @@ from ..cdk.flow_code import FlowCode
 
 class UniflowStack(core.Stack):
 
-    def __init__(self, scope: core.Construct, id: str, **kwargs) -> None:
+    def __init__(self, scope: core.Construct, id: str, code_dir: Path, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
+        self._code_dir = code_dir
         self.__build_requirements_layer()
         self.__build_code_layer()
 
     @property
-    def code_dir(self):
-        return Path(__main__.__file__).relative_to(Path.cwd()).as_posix().split('/')[0]
+    def code_dir(self) -> str:
+        return self._code_dir.as_posix()
 
     def add_lambda_for_task(self, python_path: str, method_name: str) -> None:
         module_name, class_name = python_path.rsplit(".", 1)

@@ -1,5 +1,6 @@
 import logging
 
+from pathlib import Path
 from ..utils import get_methods_with_decorator, get_python_path
 
 logger = logging.getLogger(__name__)
@@ -18,8 +19,12 @@ class Uniflow(object):
 
         super().__init__()
         self.__unigraph = None
-        self.app = core.App()
-        self.stack = UniflowStack(self.app, "Uniflow")
+        self.app = core.App(outdir=Path.cwd().joinpath("cdk.out").as_posix())
+        self.stack = UniflowStack(self.app, "Uniflow", self.code_dir)
+
+    @property
+    def code_dir(self) -> Path:
+        return Path.cwd().joinpath(self.__module__.split('.')[0])
 
     def __get_task_methods(self) -> object:
         tasks = list(get_methods_with_decorator(self.__class__, "task"))
@@ -42,16 +47,4 @@ class Uniflow(object):
     def build(self) -> None:
         self.__build_graph()
         self.__create_task_lambdas()
-
-    @staticmethod
-    def hello_world(event, context):
-        logging.info(event)
-        logging.info(context)
-        print("Hello World!")
-
-    def synth(self):
         self.app.synth()
-
-
-if __name__ == "__main__":
-    Uniflow().synth()

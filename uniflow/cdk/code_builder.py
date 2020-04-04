@@ -37,7 +37,9 @@ class CodeBuilder(object):
     def code_archive(self):
         return self.build_directory.joinpath("code.zip")
 
-    def __copy_code_sites_packages(self):
+    def __copy_code_to_site_packages(self):
+        if self.site_packages.exists():
+            shutil.rmtree(self.site_packages)
         shutil.copytree(self.code_directory, self.site_packages)
 
     def __archive_code(self):
@@ -47,5 +49,5 @@ class CodeBuilder(object):
             raise Exception("Failed to archive code!")
 
     def package(self):
-        self.__copy_code_sites_packages()
+        self.__copy_code_to_site_packages()
         self.__archive_code()

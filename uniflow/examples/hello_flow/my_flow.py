@@ -27,9 +27,3 @@ class MyFlow(Uniflow):
     @task(depends_on=["task5"])
     def task6(event, context):
         return "Task 6"
-
-
-if __name__ == "__main__":
-    flow = MyFlow()
-    flow.build()
-    flow.synth()

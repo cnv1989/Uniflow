@@ -1,4 +1,5 @@
 import inspect
+import shutil
 import __main__
 
 from pathlib import Path

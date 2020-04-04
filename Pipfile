@@ -35,6 +35,8 @@ typing-extensions = "==3.7.4.1"
 "aws-cdk.cx-api" = "==1.31.0"
 "aws-cdk.region-info" = "==1.31.0"
 coloredlogs = "*"
+jinja2 = "*"
+boto3 = "*"
 
 [requires]
 python_version = "3.7"

@@ -3,7 +3,7 @@ import logging
 import shutil
 
 from pathlib import Path
-from ..constants import LAMBDA_RUNTIME
+from ..constants import LAMBDA_RUNTIME, IGNORE_PATTERNS
 
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class CodeBuilder(object):
     def __copy_code_to_site_packages(self):
         if self.site_packages.exists():
             shutil.rmtree(self.site_packages)
-        shutil.copytree(self.code_directory, self.site_packages)
+        shutil.copytree(self.code_directory, self.site_packages, ignore=IGNORE_PATTERNS)
 
     def __archive_code(self):
         logger.info(f"Archiving requirements in {self.build_code_directory.as_posix()} to {self.code_archive.as_posix()}")

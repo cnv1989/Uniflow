@@ -36,9 +36,26 @@ def create_cdk_contex():
         json.dump(cdk_context, file, indent=4)
 
 
+def _generate_requirements():
+    click.echo("START: Generating requirements for flow")
+    requirements_path = Path.cwd().joinpath("requirements.txt")
+    if not requirements_path.exists():
+        requirements_path.touch()
+    with open(requirements_path, "w") as req_file:
+        process = subprocess.Popen(
+            ["pipenv", "lock", "-r"],
+            cwd=os.getcwd(),
+            stdout=req_file
+        )
+        process.wait()
+    click.echo("Finished: Generating requirements for flow")
+
+
 @cli.command()
 @click.argument('flow')
 def build(flow):
+    _clean()
+    _generate_requirements()
     click.echo(f"START: Building flow {flow}")
     create_cdk_contex()
     module_name, class_name = flow.rsplit(".", 1)
@@ -60,13 +77,17 @@ def synth():
     click.echo("Finished: Synthesizing flow")
 
 
-@cli.command()
-def clean():
+def _clean():
     click.echo("START: Cleaning build directory.")
     build_dir = Path.cwd().joinpath("cdk.out")
     if build_dir.exists():
         shutil.rmtree(build_dir)
     click.echo("FINISHED: Cleaning build directory.")
+
+
+@cli.command()
+def clean():
+    _clean()
 
 
 @cli.command()
@@ -93,6 +114,13 @@ def start_ddb():
         ["java",  f"-Djava.library.path={DDB_LOCAL_PATH }/DynamoDBLocal_lib",  "-jar", f"{DDB_LOCAL_PATH}/DynamoDBLocal.jar",  "-inMemory"]
     )
     process.wait()
+
+
+@cli.command()
+def build_docker():
+    from uniflow.cdk.task_image_builder import TaskImageBuilder
+    tib = TaskImageBuilder()
+    tib.build()
 
 
 if __name__ == "__main__":

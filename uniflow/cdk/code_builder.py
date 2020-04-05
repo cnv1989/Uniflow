@@ -38,12 +38,13 @@ class CodeBuilder(object):
         return self.build_directory.joinpath("code.zip")
 
     def __copy_code_to_site_packages(self):
+        logging.info(f"Copying code from {self.code_directory.as_posix()} to {self.site_packages.as_posix()}")
         if self.site_packages.exists():
             shutil.rmtree(self.site_packages)
         shutil.copytree(self.code_directory, self.site_packages, ignore=IGNORE_PATTERNS)
 
     def __archive_code(self):
-        logger.info(f"Archiving requirements in {self.build_code_directory.as_posix()} to {self.code_archive.as_posix()}")
+        logger.info(f"Archiving code {self.build_code_directory.as_posix()} to {self.code_archive.as_posix()}")
         shutil.make_archive(self.code_archive.as_posix().replace('.zip', ''), 'zip', self.build_code_directory.as_posix())
         if not self.code_archive.exists():
             raise Exception("Failed to archive code!")

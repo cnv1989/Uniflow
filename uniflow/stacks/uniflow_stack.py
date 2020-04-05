@@ -8,22 +8,25 @@ from pathlib import Path
 from ..constants import LAMBDA_RUNTIME
 from ..cdk.flow_requirements import FlowRequirements
 from ..cdk.flow_code import FlowCode
+from ..cdk.task_image_builder import TaskImageBuilder
 
 
 class UniflowStack(core.Stack):
 
-    def __init__(self, scope: core.Construct, id: str, code_dir: Path, **kwargs) -> None:
+    def __init__(self, scope: core.Construct, id: str, code_dir: Path, flow_name: str, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
         self._code_dir = code_dir
+        self._flow_name = flow_name
         self.__build_requirements_layer()
         self.__build_code_layer()
+        self.__build_task_image()
 
     @property
     def code_dir(self) -> str:
         return self._code_dir.as_posix()
 
-    def add_lambda_for_task(self, python_path: str, method_name: str) -> None:
-        module_name, class_name = python_path.rsplit(".", 1)
+    def add_lambda_for_task(self, method_name: str) -> None:
+        module_name, class_name = self._flow_name.rsplit(".", 1)
 
         code = f"""
         import importlib
@@ -58,3 +61,7 @@ class UniflowStack(core.Stack):
             "code",
             code=FlowCode(self.code_dir)
         )
+
+    def __build_task_image(self):
+        self.task_image = TaskImageBuilder(repository_name=self._flow_name)
+        self.task_image.build()

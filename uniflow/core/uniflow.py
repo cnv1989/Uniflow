@@ -20,7 +20,7 @@ class Uniflow(object):
         super().__init__()
         self.__unigraph = None
         self.app = core.App(outdir=Path.cwd().joinpath("cdk.out").as_posix())
-        self.stack = UniflowStack(self.app, "Uniflow", self.code_dir)
+        self.stack = UniflowStack(self.app, self.__class__.__name__, self.code_dir, get_python_path(self))
 
     @property
     def code_dir(self) -> Path:
@@ -42,7 +42,7 @@ class Uniflow(object):
 
     def __create_task_lambdas(self):
         for node in self.__unigraph.nodes:
-            self.stack.add_lambda_for_task(get_python_path(self), node.name)
+            self.stack.add_lambda_for_task(node.name)
 
     def build(self) -> None:
         self.__build_graph()

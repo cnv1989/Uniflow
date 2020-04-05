@@ -56,7 +56,7 @@ class RequirementsBuilder(object):
         """
         Build lambda dependencies in a container as-close-as-possible to the actual runtime environment.
         """
-        logger.warning('Installing dependencies [running in Docker]...')
+        logger.info('Installing dependencies [running in Docker]...')
         client = docker.from_env()
         container = client.containers.run(
             image='lambci/lambda:build-python3.7',

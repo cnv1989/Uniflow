@@ -1,7 +1,6 @@
-from ..core.task_node import AbstractNode
 from ..core.uniflow import Uniflow
 from ..exceptions.errors import TaskDefinitionError, TaskExecutionError
-from .constants import DecoratorOperation
+from ..constants import DecoratorOperation, JobPriority
 
 
 class Task(object):
@@ -9,6 +8,7 @@ class Task(object):
     def __init__(self, f=None, compute="batch", depends_on=[]):
         self.__f = f
         self.compute = compute
+        self.__priority = JobPriority.HIGH
         self.__depends_on = depends_on
         self.__parents = []
         self.__children = []

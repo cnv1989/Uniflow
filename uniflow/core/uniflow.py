@@ -42,7 +42,8 @@ class Uniflow(object):
 
     def __create_task_lambdas(self):
         for node in self.__unigraph.nodes:
-            self.stack.add_lambda_for_task(node.name)
+            self.stack.add_lambda_for_task(node.task)
+            self.stack.add_job_definition_for_task(node.task)
 
     def build(self) -> None:
         self.__build_graph()

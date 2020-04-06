@@ -7,6 +7,8 @@ verify_ssl = true
 docker = "*"
 uniflow = {editable = true,path = "."}
 ipdb = "*"
+aws-cdk-aws-batch = "*"
+aws-cdk-aws-ec2 = "*"
 
 [packages]
 click = "==7.1.1"
@@ -37,6 +39,7 @@ typing-extensions = "==3.7.4.1"
 coloredlogs = "*"
 jinja2 = "*"
 boto3 = "*"
+aws-cdk-aws-batch = "*"
 
 [requires]
 python_version = "3.7"

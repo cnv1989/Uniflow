@@ -4,7 +4,7 @@ import docker
 import boto3
 import shutil
 from botocore.exceptions import ClientError
-from ..constants import IGNORE_PATTERNS
+from uniflow.constants import IGNORE_PATTERNS
 
 from pathlib import Path
 
@@ -12,7 +12,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-class TaskImageBuilder(object):
+class BatchContainerImage(object):
 
     def __init__(self, repository_name: str = "uniflow.task.images") -> None:
         self.__repository_name = repository_name.lower()
@@ -34,6 +34,10 @@ class TaskImageBuilder(object):
     @property
     def tag(self) -> str:
         return self.__repository_info["repositoryUri"]
+
+    @property
+    def repository_arn(self) -> str:
+        return self.__repository_info['repositoryArn']
 
     def __create_ecr_repository_if_not_exists(self):
         try:

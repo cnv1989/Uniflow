@@ -118,8 +118,8 @@ def start_ddb():
 
 @cli.command()
 def build_docker():
-    from uniflow.cdk.task_image_builder import TaskImageBuilder
-    tib = TaskImageBuilder()
+    from uniflow.docker.batch_container_image import BatchContainerImage
+    tib = BatchContainerImage()
     tib.build()
 
 

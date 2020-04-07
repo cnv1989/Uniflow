@@ -3,8 +3,8 @@ import logging
 import shutil
 
 from pathlib import Path
-from ..constants import LAMBDA_RUNTIME, IGNORE_PATTERNS
-
+from ..constants import IGNORE_PATTERNS
+from uniflow.cdk import LAMBDA_RUNTIME
 
 logger = logging.getLogger(__name__)
 

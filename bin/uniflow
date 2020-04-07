@@ -51,6 +51,12 @@ def _generate_requirements():
     click.echo("Finished: Generating requirements for flow")
 
 
+def _get_flow_class_from_flow(flow):
+    module_name, class_name = flow.rsplit(".", 1)
+    flow_module = importlib.import_module(module_name)
+    return getattr(flow_module, class_name)
+
+
 @cli.command()
 @click.argument('flow')
 def build(flow):
@@ -58,10 +64,7 @@ def build(flow):
     _generate_requirements()
     click.echo(f"START: Building flow {flow}")
     create_cdk_contex()
-    module_name, class_name = flow.rsplit(".", 1)
-    flow_module = importlib.import_module(module_name)
-    flow_class = getattr(flow_module, class_name)
-    flow_ob = flow_class()
+    flow_ob = _get_flow_class_from_flow(flow)()
     flow_ob.build()
     click.echo(f"FINISHED: Building flow {flow}")
 
@@ -121,6 +124,20 @@ def build_docker():
     from uniflow.docker.batch_container_image import BatchContainerImage
     tib = BatchContainerImage()
     tib.build()
+
+
+@cli.command()
+@click.argument("flow", envvar='FLOW')
+@click.option("--task", envvar='TASK', help="Name of the task you would like to run")
+@click.option("--run-id", help="ID identifying the unique execution of the flow")
+def run(flow, task, run_id):
+    if task and not run_id:
+        click.echo("Missing run_id to execute a task.")
+    elif not task and run_id:
+        click.echo("Missing task to execute a particular run again.")
+    else:
+        flow_class = _get_flow_class_from_flow(flow)
+        getattr(flow_class, task)(run_id=run_id)
 
 
 if __name__ == "__main__":

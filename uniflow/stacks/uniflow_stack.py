@@ -8,7 +8,8 @@ from aws_cdk import aws_ecs as ecs_
 from aws_cdk import aws_ecr as ecr_
 from pathlib import Path
 
-from ..constants import LAMBDA_RUNTIME, JobPriority
+from ..constants import JobPriority
+from uniflow.cdk import LAMBDA_RUNTIME
 from ..cdk.flow_requirements import FlowRequirements
 from ..cdk.flow_code import FlowCode
 from uniflow.docker.batch_container_image import BatchContainerImage
@@ -83,7 +84,8 @@ class UniflowStack(core.Stack):
             image=container_image,
             memory_limit_mib=1024*2,
             environment={
-                "TASK_NAME": task.name
+                "TASK": task.name,
+                "FLOW": self.__flow_name
             }
         )
 

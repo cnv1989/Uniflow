@@ -4,8 +4,7 @@ import logging
 import shutil
 
 from pathlib import Path
-from ..constants import LAMBDA_RUNTIME
-
+from uniflow.cdk import LAMBDA_RUNTIME
 
 logger = logging.getLogger(__name__)
 

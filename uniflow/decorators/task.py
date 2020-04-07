@@ -46,7 +46,7 @@ class Task(object):
             if op == DecoratorOperation.COMPILE:
                 return self.__compile()
             elif op == DecoratorOperation.EXECUTE:
-                return self.__execute(*args, **kwargs)
+                self.__execute(*args, **kwargs)
 
         return wrapped_f
 
@@ -67,4 +67,4 @@ class Task(object):
 
     def __execute(self, *args: [object], **kwargs: {str: object}) -> object:
         print(f"Executing task {self.name}")
-        return self.__f(*args, **kwargs)
+        self.__f(*args, **kwargs)

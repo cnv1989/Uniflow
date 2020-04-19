@@ -6,6 +6,8 @@ from aws_cdk import aws_batch as batch_
 from aws_cdk import aws_ec2 as ec2_
 from aws_cdk import aws_ecs as ecs_
 from aws_cdk import aws_ecr as ecr_
+from aws_cdk import aws_s3 as s3_
+from aws_cdk import aws_iam as iam_
 from pathlib import Path
 
 from ..constants import JobPriority
@@ -31,6 +33,7 @@ class UniflowStack(core.Stack):
         self.__batch_job_definitions = []
 
         self.__create_vpc()
+        self.__create_datastore_bucket()
         self.__create_requirements_layer()
         self.__create_code_layer()
         self.__create_batch_container_image()
@@ -83,9 +86,12 @@ class UniflowStack(core.Stack):
         job_definition_container = batch_.JobDefinitionContainer(
             image=container_image,
             memory_limit_mib=1024*2,
+            job_role=self.__job_definition_role,
             environment={
                 "TASK": task.name,
-                "FLOW": self.__flow_name
+                "FLOW": self.__flow_name,
+                "FLOW_DATASTORE": self.__datastore.bucket_name,
+                "STACK": self.stack_name
             }
         )
 
@@ -119,11 +125,22 @@ class UniflowStack(core.Stack):
     def __create_vpc(self):
         self.__vpc = ec2_.Vpc(self, f"{self.__id}Vpc", max_azs=3)
 
+    def __create_datastore_bucket(self):
+        self.__datastore = s3_.Bucket(self, f"{self.__id}_FlowDatastore",)
+
     def __create_batch_infrastructure(self):
         self.__compute_resources = batch_.ComputeResources(
             vpc=self.__vpc,
             bid_percentage=50
         )
+
+        self.__job_definition_role = iam_.Role(
+            self,
+            f"{self.__id}_BatchJobDefinitionRole",
+            assumed_by=iam_.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            managed_policies=[iam_.ManagedPolicy.from_aws_managed_policy_name("AWSBatchFullAccess")]
+        )
+        self.__datastore.grant_read_write(self.__job_definition_role)
 
         self.__compute_env = batch_.ComputeEnvironment(
             self,

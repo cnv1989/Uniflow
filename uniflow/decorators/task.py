@@ -1,6 +1,14 @@
+import os
+import logging
+import boto3
+import pickle
+
 from ..core.uniflow import Uniflow
 from ..exceptions.errors import TaskDefinitionError, TaskExecutionError
 from ..constants import DecoratorOperation, JobPriority
+
+
+logger = logging.getLogger(__name__)
 
 
 class Task(object):
@@ -8,6 +16,7 @@ class Task(object):
     def __init__(self, f=None, compute="batch", depends_on=[]):
         self.__f = f
         self.compute = compute
+        self.__run_id = None
         self.__priority = JobPriority.HIGH
         self.__depends_on = depends_on
         self.__parents = []
@@ -20,6 +29,14 @@ class Task(object):
     @property
     def dependencies(self):
         return self.__depends_on
+
+    @property
+    def datastore(self) -> str:
+        return os.environ['FLOW_DATASTORE']
+
+    @property
+    def task_object(self) -> str:
+        return f"{os.environ['FLOW']}/{os.environ['TASK']}/{self.__run_id}/result.pkl"
 
     def __infer_decorator_operation_from_args(self, obj: object, *args: [object], **kwargs: {str: object}):
         is_instance_of_uniflow = (len(args) > 0 and isinstance(args[0], Uniflow)) or \
@@ -46,7 +63,8 @@ class Task(object):
             if op == DecoratorOperation.COMPILE:
                 return self.__compile()
             elif op == DecoratorOperation.EXECUTE:
-                self.__execute(*args, **kwargs)
+                self.__run_id = kwargs.pop('run_id')
+                self.__execute(**kwargs)
 
         return wrapped_f
 
@@ -65,6 +83,18 @@ class Task(object):
         print(f"Compiling task {self.name}")
         return self
 
-    def __execute(self, *args: [object], **kwargs: {str: object}) -> object:
+    def __execute(self) -> None:
         print(f"Executing task {self.name}")
-        self.__f(*args, **kwargs)
+        args = self.__get_parent_tasks_outputs()
+        ret = self.__f(*args)
+        self.__save_task_output(ret)
+
+    def __get_parent_tasks_outputs(self) -> [object]:
+        logger.info(f"Loading parent task outputs from datastore for run_id={self.__run_id}.")
+        return []
+
+    def __save_task_output(self, ret) -> None:
+        logger.info(f"Saving task output to datastore for run_id={self.__run_id}.")
+        pickle_buffer = pickle.dumps(ret)
+        s3_resource = boto3.resource('s3')
+        s3_resource.Object(self.datastore, self.task_object).put(Body=pickle_buffer)

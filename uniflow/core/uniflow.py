@@ -1,7 +1,9 @@
 import logging
 
 from pathlib import Path
+from typing import Generator, Callable
 from ..utils import get_methods_with_decorator, get_python_path
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,7 @@ class Uniflow(object):
     def code_dir(self) -> Path:
         return Path.cwd().joinpath(self.__module__.split('.')[0])
 
-    def __get_task_methods(self) -> object:
+    def __get_task_methods(self) -> Generator[Callable, None, None]:
         tasks = list(get_methods_with_decorator(self.__class__, "task"))
         for task in tasks:
             yield getattr(self, task)
@@ -40,12 +42,6 @@ class Uniflow(object):
         self.__unigraph = Unigraph.from_tasks_list(tasks)
         self.__unigraph.build()
 
-    def __create_task_lambdas(self):
-        for node in self.__unigraph.nodes:
-            self.stack.add_lambda_for_task(node.task)
-            self.stack.add_job_definition_for_task(node.task)
-
     def build(self) -> None:
         self.__build_graph()
-        self.__create_task_lambdas()
         self.app.synth()

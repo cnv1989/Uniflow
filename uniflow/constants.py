@@ -10,6 +10,6 @@ class JobPriority(Enum):
     LOW = 3
 
 
-class DecoratorOperation(Enum):
-    COMPILE = auto()
-    EXECUTE = auto()
+class DecoratorMode(Enum):
+    COMPILATION = auto()
+    EXECUTION = auto()

@@ -30,7 +30,7 @@ class UniflowStack(core.Stack):
         self.__code_layer = None
         self.__batch_container_image = None
         self.__lambda_functions = []
-        self.__batch_job_definitions = []
+        self.__batch_job_definitions = {}
 
         self.__create_vpc()
         self.__create_datastore_bucket()
@@ -38,6 +38,7 @@ class UniflowStack(core.Stack):
         self.__create_code_layer()
         self.__create_batch_container_image()
         self.__create_batch_infrastructure()
+        self.__create_job_definition()
 
     @property
     def code_dir(self) -> str:
@@ -81,26 +82,26 @@ class UniflowStack(core.Stack):
         )
         self.__lambda_functions.append(lambda_function)
 
-    def add_job_definition_for_task(self, task: Task) -> None:
+    def __create_job_definition(self) -> None:
         container_image = ecs_.ContainerImage.from_ecr_repository(self.__ecr_repository)
         job_definition_container = batch_.JobDefinitionContainer(
             image=container_image,
             memory_limit_mib=1024*2,
             job_role=self.__job_definition_role,
             environment={
-                "TASK": task.name,
                 "FLOW": self.__flow_name,
-                "FLOW_DATASTORE": self.__datastore.bucket_name,
-                "STACK": self.stack_name
+                "FLOW_DATASTORE": self.__datastore.bucket_name
             }
         )
 
+        job_def_id = f"{self.__id}_BatchTaskJobDef"
+
         job_definition = batch_.JobDefinition(
             self,
-            f"{self.__id}_{task.name}_BatchJobDef",
+            job_def_id,
             container=job_definition_container
         )
-        self.__batch_job_definitions.append(job_definition)
+        self.__batch_job_definitions[job_def_id] = job_definition
 
     def __create_requirements_layer(self):
         # The code that defines your stack goes here

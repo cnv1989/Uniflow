@@ -128,7 +128,7 @@ def build_docker():
 
 @cli.command()
 @click.argument("flow", envvar='FLOW')
-@click.option("--task", envvar='TASK', help="Name of the task you would like to run")
+@click.option("--task", envvar='TASK')
 @click.option("--run-id", help="ID identifying the unique execution of the flow")
 def run(flow, task, run_id):
     if task and not run_id:
@@ -137,7 +137,8 @@ def run(flow, task, run_id):
         click.echo("Missing task to execute a particular run again.")
     else:
         flow_class = _get_flow_class_from_flow(flow)
-        getattr(flow_class, task)(run_id=run_id)
+        task_manager = getattr(flow_class, task)(run_id=run_id)
+        task_manager.execute_task()
 
 
 if __name__ == "__main__":

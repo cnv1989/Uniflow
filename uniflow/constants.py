@@ -1,5 +1,7 @@
+import os
 import shutil
 from enum import Enum, auto
+
 
 IGNORE_PATTERNS = shutil.ignore_patterns('*.pyc', 'tmp*', 'cdk.out', '__pycache__', '*.egg-info', '.git')
 

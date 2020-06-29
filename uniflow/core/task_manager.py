@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 class TaskManager(object):
     s3_resource = boto3.resource('s3')
 
-    def __init__(self, task: Task, run_id: str) -> None:
+    def __init__(self, task: Task, run_id: str, local: bool = False) -> None:
         self.__task = task
         self.__run_id = run_id
+        self.local = local
 
     @property
     def task(self):
@@ -53,10 +54,13 @@ class TaskManager(object):
         self.s3_resource.Object(self.datastore, self.task_object).put(Body=pickle_buffer)
 
     def execute_task(self) -> None:
-        print(f"Executing task={self.task.name}")
+        logger.info(f"Executing task={self.task.name}")
         args = self.__get_parent_tasks_outputs()
         ret = self.task.function(*args)
-        self.__save_task_output(ret)
+        if self.local:
+            logger.info(ret)
+        else:
+            self.__save_task_output(ret)
 
     def get_task_status(self):
         pass

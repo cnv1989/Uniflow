@@ -23,6 +23,7 @@ class Uniflow(object):
         self.__unigraph = None
         self.app = core.App(outdir=Path.cwd().joinpath("cdk.out").as_posix())
         self.stack = UniflowStack(self.app, self.__class__.__name__, self.code_dir, get_python_path(self))
+        self.tasks = []
 
     @property
     def code_dir(self) -> Path:
@@ -33,13 +34,15 @@ class Uniflow(object):
         for task in tasks:
             yield getattr(self, task)
 
+    def __compile_all_tasks(self) -> None:
+        self.tasks = []
+        for task in self.__get_task_methods():
+            self.tasks.append(task(compile=True))
+
     def __build_graph(self) -> None:
         from .unigraph import Unigraph  # avoid circular import task -> uniflow -> unigraph -> task
-
-        tasks = []
-        for task in self.__get_task_methods():
-            tasks.append(task(compile=True))
-        self.__unigraph = Unigraph.from_tasks_list(tasks)
+        self.__compile_all_tasks()
+        self.__unigraph = Unigraph.from_tasks_list(self.tasks, self.stack)
         self.__unigraph.build()
 
     def build(self) -> None:

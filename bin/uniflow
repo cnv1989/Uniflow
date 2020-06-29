@@ -3,14 +3,15 @@
 import click
 import os
 import subprocess
-import urllib.request
-import tarfile
+import boto3
 import logging
 import shutil
 import json
 import importlib
 
 from pathlib import Path
+from uniflow.client.api_client import ApiClient
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -104,41 +105,50 @@ def deploy():
     click.echo("FINISHED: Deploying flow.")
 
 
-def download_ddb_local():
-    urllib.request.urlretrieve(DDB_URL, DDB_DOWNLOAD_PATH )
-    tar = tarfile.open(DDB_DOWNLOAD_PATH)
-    tar.extractall(path=DDB_LOCAL_PATH)
-    tar.close()
-
-
-@cli.command()
-def start_ddb():
-    process = subprocess.Popen(
-        ["java",  f"-Djava.library.path={DDB_LOCAL_PATH }/DynamoDBLocal_lib",  "-jar", f"{DDB_LOCAL_PATH}/DynamoDBLocal.jar",  "-inMemory"]
-    )
-    process.wait()
-
-
-@cli.command()
-def build_docker():
-    from uniflow.docker.batch_container_image import BatchContainerImage
-    tib = BatchContainerImage()
-    tib.build()
-
-
 @cli.command()
 @click.argument("flow", envvar='FLOW')
 @click.option("--task", envvar='TASK')
 @click.option("--run-id", help="ID identifying the unique execution of the flow")
-def run(flow, task, run_id):
+@click.option("--local", is_flag=True)
+def execute(flow, task, run_id, local):
     if task and not run_id:
         click.echo("Missing run_id to execute a task.")
     elif not task and run_id:
         click.echo("Missing task to execute a particular run again.")
     else:
         flow_class = _get_flow_class_from_flow(flow)
-        task_manager = getattr(flow_class, task)(run_id=run_id)
+        task_manager = getattr(flow_class, task)(run_id=run_id, local=local)
         task_manager.execute_task()
+
+
+@cli.command()
+@click.argument("flow", envvar='FLOW')
+def start(flow):
+    _, stack_name = flow.rsplit(".", 1)
+    client = ApiClient(stack_name)
+    client.start_flow()
+
+
+# def download_ddb_local():
+#     urllib.request.urlretrieve(DDB_URL, DDB_DOWNLOAD_PATH )
+#     tar = tarfile.open(DDB_DOWNLOAD_PATH)
+#     tar.extractall(path=DDB_LOCAL_PATH)
+#     tar.close()
+#
+#
+# @cli.command()
+# def start_ddb():
+#     process = subprocess.Popen(
+#         ["java",  f"-Djava.library.path={DDB_LOCAL_PATH }/DynamoDBLocal_lib",  "-jar", f"{DDB_LOCAL_PATH}/DynamoDBLocal.jar",  "-inMemory"]
+#     )
+#     process.wait()
+#
+#
+# @cli.command()
+# def build_docker():
+#     from uniflow.docker.batch_container_image import BatchContainerImage
+#     tib = BatchContainerImage()
+#     tib.build()
 
 
 if __name__ == "__main__":

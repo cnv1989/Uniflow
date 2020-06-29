@@ -1,16 +1,18 @@
 from ..decorators.task import Task
 from .task_node import TaskNode
 from .abstract_node import AbstractNode
+from ..stacks.uniflow_stack import  UniflowStack
 
 
 class Unigraph(object):
 
-    def __init__(self) -> None:
+    def __init__(self, stack: UniflowStack) -> None:
         self.__nodes = {}
+        self.__stack = stack
 
     @classmethod
-    def from_tasks_list(cls, tasks: [Task]) -> object:
-        graph = cls()
+    def from_tasks_list(cls, tasks: [Task], stack: UniflowStack) -> object:
+        graph = cls(stack)
         for task in tasks:
             graph.add_node(TaskNode(task))
         return graph
@@ -24,7 +26,7 @@ class Unigraph(object):
     def nodes(self):
         return self.__nodes.values()
 
-    def update_node_relationships(self):
+    def __update_node_relationships(self):
         for key, node in self.__nodes.items():
             for parent_name in node.task.dependencies:
                 parent = self.__nodes[parent_name]
@@ -47,7 +49,7 @@ class Unigraph(object):
         for child in node.children:
             self.__check_for_cycle(child, visitation_map)
 
-    def check_for_cycles(self):
+    def __check_for_cycles(self):
         for edge_node in self.get_edge_nodes():
             visitation_map = {}
             for key, node in self.__nodes.items():
@@ -59,7 +61,7 @@ class Unigraph(object):
         for child in node.children:
             self.__dfs(child, visitation_map)
 
-    def check_for_islands(self):
+    def __check_for_islands(self):
         visitation_map = {}
         for key, node in self.__nodes.items():
             visitation_map[key] = False
@@ -72,6 +74,6 @@ class Unigraph(object):
                 raise Exception(f"Found island at {node_name}")
 
     def build(self):
-        self.update_node_relationships()
-        self.check_for_cycles()
-        self.check_for_islands()
+        self.__update_node_relationships()
+        self.__check_for_cycles()
+        self.__check_for_islands()

@@ -8,6 +8,9 @@ from aws_cdk import aws_ecs as ecs_
 from aws_cdk import aws_ecr as ecr_
 from aws_cdk import aws_s3 as s3_
 from aws_cdk import aws_iam as iam_
+from aws_cdk import aws_dynamodb as dynamodb_
+from aws_cdk import aws_lambda_event_sources as lambda_event_sources_
+from aws_cdk import aws_apigateway as apigateway_
 from pathlib import Path
 
 from ..constants import JobPriority
@@ -15,7 +18,6 @@ from uniflow.cdk import LAMBDA_RUNTIME
 from ..cdk.flow_requirements import FlowRequirements
 from ..cdk.flow_code import FlowCode
 from uniflow.docker.batch_container_image import BatchContainerImage
-from ..decorators.task import Task
 
 
 class UniflowStack(core.Stack):
@@ -31,6 +33,9 @@ class UniflowStack(core.Stack):
         self.__batch_container_image = None
         self.__lambda_functions = []
         self.__batch_job_definitions = {}
+        self.__task_table = None
+        self.__flow_table = None
+        self.__rest_api = None
 
         self.__create_vpc()
         self.__create_datastore_bucket()
@@ -38,7 +43,12 @@ class UniflowStack(core.Stack):
         self.__create_code_layer()
         self.__create_batch_container_image()
         self.__create_batch_infrastructure()
-        self.__create_job_definition()
+        self.__create_task_executor_job_definition()
+        self.__create_task_table()
+        self.__add_lambda_to_handle_task_table_events()
+        self.__create_flow_table()
+        self.__add_lambda_to_handle_flow_table_events()
+        self.__create_rest_api()
 
     @property
     def code_dir(self) -> str:
@@ -60,29 +70,129 @@ class UniflowStack(core.Stack):
     def batch_container_image(self) -> BatchContainerImage:
         return self.__batch_container_image
 
-    def add_lambda_for_task(self, task: Task) -> None:
-        module_name, class_name = self.__flow_name.rsplit(".", 1)
+    def __create_task_table(self) -> None:
+        self.__task_table = dynamodb_.Table(
+            self,
+            f"{self.__id}_TaskTable",
+            partition_key=dynamodb_.Attribute(name="TaskName", type=dynamodb_.AttributeType.STRING),
+            sort_key=dynamodb_.Attribute(name="RunId", type=dynamodb_.AttributeType.STRING),
+            billing_mode=dynamodb_.BillingMode.PAY_PER_REQUEST,
+            stream=dynamodb_.StreamViewType.NEW_IMAGE
+        )
 
+        self.__task_table.add_global_secondary_index(
+            partition_key=dynamodb_.Attribute(name="FlowId", type=dynamodb_.AttributeType.STRING),
+            sort_key=dynamodb_.Attribute(name="RunId", type=dynamodb_.AttributeType.STRING),
+            index_name="TaskTableGlobalIndexFlowIdRunId"
+        )
+
+    def __create_flow_table(self) -> None:
+        self.__flow_table = dynamodb_.Table(
+            self,
+            f"{self.__id}_FlowTable",
+            partition_key=dynamodb_.Attribute(name="FlowId", type=dynamodb_.AttributeType.STRING),
+            sort_key=dynamodb_.Attribute(name="Created", type=dynamodb_.AttributeType.STRING),
+            billing_mode=dynamodb_.BillingMode.PAY_PER_REQUEST,
+            stream=dynamodb_.StreamViewType.NEW_IMAGE
+        )
+
+        self.__flow_table.add_local_secondary_index(
+            sort_key=dynamodb_.Attribute(name="LastModified", type=dynamodb_.AttributeType.STRING),
+            index_name="FlowTableLocalIndexLastUpdated"
+        )
+
+    def __add_lambda_to_handle_task_table_events(self) -> None:
         code = f"""
-        import importlib
+        from uniflow.lambda_handlers import TaskTableEventHandler
         
         def handler(event, context):
-            module = importlib.import_module("{module_name}")
-            assert hasattr(module, "{class_name}"), "class {class_name} is not in {module_name}"
-            cls = getattr(module, "{class_name}")
-            return getattr(cls, "{task.name}")(event, context)  
+            handler = TaskTableEventHandler(event, context)
+            return handler.execute()
         """
         lambda_function = lambda_.Function(
             self,
-            f"{self.__id}_{task.name}_LambdaFunction",
+            f"{self.__id}_TaskTableEventHandler",
             layers=[self.__requirements_layer, self.__code_layer],
             runtime=LAMBDA_RUNTIME,
             code=lambda_.InlineCode(textwrap.dedent(code)),
-            handler="index.handler"
+            handler="index.handler",
+            timeout=core.Duration.minutes(15)
         )
+        self.__task_table.grant_read_write_data(lambda_function)
+        lambda_function.add_event_source(lambda_event_sources_.DynamoEventSource(
+            self.__task_table,
+            starting_position=lambda_.StartingPosition.LATEST
+        ))
         self.__lambda_functions.append(lambda_function)
 
-    def __create_job_definition(self) -> None:
+    def __add_lambda_to_handle_flow_table_events(self) -> None:
+        code = f"""
+        from uniflow.lambda_handlers import FlowTableEventHandler
+        
+        def handler(event, context):
+            handler = FlowTableEventHandler(event, context)
+            return handler.execute()
+        """
+        lambda_function = lambda_.Function(
+            self,
+            f"{self.__id}_FlowTableEventHandler",
+            layers=[self.__requirements_layer, self.__code_layer],
+            runtime=LAMBDA_RUNTIME,
+            code=lambda_.InlineCode(textwrap.dedent(code)),
+            handler="index.handler",
+            timeout=core.Duration.minutes(15)
+        )
+        self.__flow_table.grant_read_write_data(lambda_function)
+        lambda_function.add_event_source(lambda_event_sources_.DynamoEventSource(
+            self.__flow_table,
+            starting_position=lambda_.StartingPosition.LATEST
+        ))
+        self.__lambda_functions.append(lambda_function)
+
+    def __create_rest_api(self) -> None:
+        code = f"""
+        from flask_serverless import APIGWProxy
+        from uniflow.api import app
+        
+        handler = APIGWProxy(app)
+        """
+        lambda_function = lambda_.Function(
+            self,
+            f"{self.__id}_ApiHandler",
+            layers=[self.__requirements_layer, self.__code_layer],
+            runtime=LAMBDA_RUNTIME,
+            code=lambda_.InlineCode(textwrap.dedent(code)),
+            handler="index.handler",
+            timeout=core.Duration.minutes(15),
+            environment={
+                "FLOW_NAME": self.__id,
+                "FLOW_TABLE": self.__flow_table.table_name,
+                "TASK_TABLE": self.__task_table.table_name,
+            }
+        )
+        lambda_function.role.add_to_policy(
+            iam_.PolicyStatement(
+                effect=iam_.Effect.ALLOW,
+                resources=[
+                    self.__flow_table.table_arn,
+                    f"{self.__flow_table.table_arn}/index/*",
+                    self.__task_table.table_arn,
+                    f"{self.__task_table.table_arn}/index/*",
+                ],
+                actions=['dynamodb:*']
+
+            )
+        )
+        # self.__flow_table.grant_read_write_data(lambda_function)
+        # self.__task_table.grant_read_write_data(lambda_function)
+        self.__rest_api = apigateway_.LambdaRestApi(
+            self,
+            f"{self.__id}_Api",
+            handler=lambda_function,
+            proxy=True,
+        )
+
+    def __create_task_executor_job_definition(self) -> None:
         container_image = ecs_.ContainerImage.from_ecr_repository(self.__ecr_repository)
         job_definition_container = batch_.JobDefinitionContainer(
             image=container_image,
@@ -94,7 +204,7 @@ class UniflowStack(core.Stack):
             }
         )
 
-        job_def_id = f"{self.__id}_BatchTaskJobDef"
+        job_def_id = f"{self.__id}_BatchTaskExecutorJobDef"
 
         job_definition = batch_.JobDefinition(
             self,

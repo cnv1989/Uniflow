@@ -56,7 +56,7 @@ class Task(object):
                 return self.__compile()
             elif op_mode == DecoratorMode.EXECUTION:
                 from ..core.task_manager import TaskManager
-                return TaskManager(self, kwargs.pop('run_id'))
+                return TaskManager(self, **kwargs)
 
         return wrapped_f
 

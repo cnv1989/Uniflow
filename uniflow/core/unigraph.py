@@ -1,23 +1,21 @@
 from ..decorators.task import Task
 from .task_node import TaskNode
 from .abstract_node import AbstractNode
-from ..stacks.uniflow_stack import  UniflowStack
 
 
 class Unigraph(object):
 
-    def __init__(self, stack: UniflowStack) -> None:
+    def __init__(self, tasks: [Task]) -> None:
+        self.__tasks = tasks
+        self.__init_nodes()
+        self.__build__graph()
+
+    def __init_nodes(self):
         self.__nodes = {}
-        self.__stack = stack
+        for task in self.__tasks:
+            self.__add_node(TaskNode(task))
 
-    @classmethod
-    def from_tasks_list(cls, tasks: [Task], stack: UniflowStack) -> object:
-        graph = cls(stack)
-        for task in tasks:
-            graph.add_node(TaskNode(task))
-        return graph
-
-    def add_node(self, node: AbstractNode) -> None:
+    def __add_node(self, node: AbstractNode) -> None:
         if node.name in self.__nodes:
             raise Exception(f"Already encountered node by name {node.name}")
         self.__nodes[node.name] = node
@@ -25,6 +23,10 @@ class Unigraph(object):
     @property
     def nodes(self):
         return self.__nodes.values()
+
+    def to_json(self):
+        return [node.to_json() for node in self.nodes]
+
 
     def __update_node_relationships(self):
         for key, node in self.__nodes.items():
@@ -73,7 +75,7 @@ class Unigraph(object):
             if not visited:
                 raise Exception(f"Found island at {node_name}")
 
-    def build(self):
+    def __build__graph(self):
         self.__update_node_relationships()
         self.__check_for_cycles()
         self.__check_for_islands()

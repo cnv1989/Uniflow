@@ -16,4 +16,4 @@ def index():
 @app.route('/flow/start', methods=["POST"])
 def start_flow():
     new_flow = FlowModel.create_new_flow()
-    return f"Started flow {new_flow.flowId}"
+    return f"Started flow {new_flow.flow_id}"

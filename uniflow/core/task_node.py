@@ -11,3 +11,4 @@ class TaskNode(AbstractNode):
     def name(self):
         return self.task.name
 
+

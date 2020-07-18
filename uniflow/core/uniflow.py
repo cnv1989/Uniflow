@@ -1,3 +1,4 @@
+import json
 import logging
 
 from pathlib import Path
@@ -20,31 +21,32 @@ class Uniflow(object):
         """
 
         super().__init__()
-        self.__unigraph = None
         self.app = core.App(outdir=Path.cwd().joinpath("cdk.out").as_posix())
         self.stack = UniflowStack(self.app, self.__class__.__name__, self.code_dir, get_python_path(self))
-        self.tasks = []
 
     @property
     def code_dir(self) -> Path:
         return Path.cwd().joinpath(self.__module__.split('.')[0])
 
-    def __get_task_methods(self) -> Generator[Callable, None, None]:
-        tasks = list(get_methods_with_decorator(self.__class__, "task"))
-        for task in tasks:
-            yield getattr(self, task)
+    @classmethod
+    def list_task_name(cls):
+        return list(get_methods_with_decorator(cls, "task"))
 
-    def __compile_all_tasks(self) -> None:
-        self.tasks = []
-        for task in self.__get_task_methods():
-            self.tasks.append(task(compile=True))
+    @classmethod
+    def compile_and_list_tasks(cls) -> Generator[Callable, None, None]:
+        tasks = []
+        task_names = list(cls.list_task_name())
+        for task_name in task_names:
+            task = getattr(cls, task_name)
+            tasks.append(task(compile=True))
+        return tasks
 
-    def __build_graph(self) -> None:
+    @classmethod
+    def generate_task_graph(cls) -> None:
         from .unigraph import Unigraph  # avoid circular import task -> uniflow -> unigraph -> task
-        self.__compile_all_tasks()
-        self.__unigraph = Unigraph.from_tasks_list(self.tasks, self.stack)
-        self.__unigraph.build()
+        tasks = cls.compile_and_list_tasks()
+        return Unigraph(tasks)
 
     def build(self) -> None:
-        self.__build_graph()
+        self.generate_task_graph()
         self.app.synth()

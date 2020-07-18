@@ -16,3 +16,12 @@ class TaskExecutionError(RuntimeError):
 
         super().__init__(message)
         self.errors = errors
+
+
+class TaskCompilationError(RuntimeError):
+    def __init__(self, task, message=None, errors=None):
+        if not message:
+            message = "Task must be compiled as a staticmethod."
+
+        super().__init__(message)
+        self.errors = errors

@@ -1,5 +1,5 @@
 import inspect
-import shutil
+import importlib
 import __main__
 
 from pathlib import Path
@@ -31,3 +31,9 @@ def get_python_path(o):
         return module_path.as_posix().replace('/', '.').replace(module_path.suffix, '') + '.' + o.__class__.__name__
     else:
         return module + '.' + o.__class__.__name__
+
+
+def get_flow_class_from_flow(flow):
+    module_name, class_name = flow.rsplit(".", 1)
+    flow_module = importlib.import_module(module_name)
+    return getattr(flow_module, class_name)

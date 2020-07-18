@@ -1,7 +1,7 @@
 import logging
 
 from ..core.uniflow import Uniflow
-from ..exceptions.errors import TaskDefinitionError, TaskExecutionError
+from ..exceptions.errors import TaskDefinitionError, TaskExecutionError, TaskCompilationError
 from ..constants import DecoratorMode, JobPriority
 
 
@@ -36,6 +36,8 @@ class Task(object):
         should_compile = kwargs.pop('compile', False)
 
         if is_instance_of_uniflow and should_compile:
+            raise TaskCompilationError(self)
+        elif not is_instance_of_uniflow and should_compile:
             return DecoratorMode.COMPILATION
         elif not is_instance_of_uniflow and not should_compile:
             return DecoratorMode.EXECUTION

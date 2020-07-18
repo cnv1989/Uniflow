@@ -45,8 +45,8 @@ class UniflowStack(core.Stack):
         self.__create_batch_infrastructure()
         self.__create_task_executor_job_definition()
         self.__create_task_table()
-        self.__add_lambda_to_handle_task_table_events()
         self.__create_flow_table()
+        self.__add_lambda_to_handle_task_table_events()
         self.__add_lambda_to_handle_flow_table_events()
         self.__create_rest_api()
 
@@ -78,6 +78,11 @@ class UniflowStack(core.Stack):
             sort_key=dynamodb_.Attribute(name="RunId", type=dynamodb_.AttributeType.STRING),
             billing_mode=dynamodb_.BillingMode.PAY_PER_REQUEST,
             stream=dynamodb_.StreamViewType.NEW_IMAGE
+        )
+
+        self.__task_table.add_local_secondary_index(
+            sort_key=dynamodb_.Attribute(name="Created", type=dynamodb_.AttributeType.STRING),
+            index_name="TaskTableLocalIndexCreated"
         )
 
         self.__task_table.add_global_secondary_index(
@@ -116,9 +121,26 @@ class UniflowStack(core.Stack):
             runtime=LAMBDA_RUNTIME,
             code=lambda_.InlineCode(textwrap.dedent(code)),
             handler="index.handler",
-            timeout=core.Duration.minutes(15)
+            timeout=core.Duration.minutes(15),
+            environment={
+                "FLOW_NAME": self.__flow_name,
+                "FLOW_TABLE": self.__flow_table.table_name,
+                "TASK_TABLE": self.__task_table.table_name,
+            }
         )
-        self.__task_table.grant_read_write_data(lambda_function)
+        lambda_function.role.add_to_policy(
+            iam_.PolicyStatement(
+                effect=iam_.Effect.ALLOW,
+                resources=[
+                    self.__flow_table.table_arn,
+                    f"{self.__flow_table.table_arn}/index/*",
+                    self.__task_table.table_arn,
+                    f"{self.__task_table.table_arn}/index/*",
+                ],
+                actions=['dynamodb:*']
+
+            )
+        )
         lambda_function.add_event_source(lambda_event_sources_.DynamoEventSource(
             self.__task_table,
             starting_position=lambda_.StartingPosition.LATEST
@@ -140,9 +162,26 @@ class UniflowStack(core.Stack):
             runtime=LAMBDA_RUNTIME,
             code=lambda_.InlineCode(textwrap.dedent(code)),
             handler="index.handler",
-            timeout=core.Duration.minutes(15)
+            timeout=core.Duration.minutes(15),
+            environment={
+                "FLOW_NAME": self.__flow_name,
+                "FLOW_TABLE": self.__flow_table.table_name,
+                "TASK_TABLE": self.__task_table.table_name,
+            }
         )
-        self.__flow_table.grant_read_write_data(lambda_function)
+        lambda_function.role.add_to_policy(
+            iam_.PolicyStatement(
+                effect=iam_.Effect.ALLOW,
+                resources=[
+                    self.__flow_table.table_arn,
+                    f"{self.__flow_table.table_arn}/index/*",
+                    self.__task_table.table_arn,
+                    f"{self.__task_table.table_arn}/index/*",
+                ],
+                actions=['dynamodb:*']
+
+            )
+        )
         lambda_function.add_event_source(lambda_event_sources_.DynamoEventSource(
             self.__flow_table,
             starting_position=lambda_.StartingPosition.LATEST
@@ -165,7 +204,7 @@ class UniflowStack(core.Stack):
             handler="index.handler",
             timeout=core.Duration.minutes(15),
             environment={
-                "FLOW_NAME": self.__id,
+                "FLOW_NAME": self.__flow_name,
                 "FLOW_TABLE": self.__flow_table.table_name,
                 "TASK_TABLE": self.__task_table.table_name,
             }
@@ -183,8 +222,6 @@ class UniflowStack(core.Stack):
 
             )
         )
-        # self.__flow_table.grant_read_write_data(lambda_function)
-        # self.__task_table.grant_read_write_data(lambda_function)
         self.__rest_api = apigateway_.LambdaRestApi(
             self,
             f"{self.__id}_Api",

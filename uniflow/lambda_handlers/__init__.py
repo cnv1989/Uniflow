@@ -6,6 +6,3 @@ __all__ = [
     'TaskTableEventHandler',
     'FlowTableEventHandler'
 ]
-
-
-

@@ -29,3 +29,10 @@ class AbstractNode(object):
     @property
     def has_children(self) -> bool:
         return len(self.__children) > 0
+
+    def to_json(self):
+        return {
+            "name": self.name,
+            "parents": [parent.name for parent in self.parents],
+            "children": [child.name for child in self.children]
+        }

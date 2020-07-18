@@ -11,17 +11,17 @@ class FlowModel(Model):
         table_name = os.getenv("FLOW_TABLE")
         region = os.getenv("AWS_REGION")
 
-    flowId = UnicodeAttribute(hash_key=True, attr_name="FlowId")
+    flow_id = UnicodeAttribute(hash_key=True, attr_name="FlowId")
     created = UTCDateTimeAttribute(range_key=True, attr_name="Created")
-    lastModified = UTCDateTimeAttribute(attr_name="LastModified")
+    last_modified = UTCDateTimeAttribute(attr_name="LastModified")
 
     @classmethod
-    def create_new_flow(cls):
+    def create_new_flow(cls) -> object:
         now = datetime.utcnow()
         new_flow = cls(
-            flowId=str(uuid4()),
+            flow_id=str(uuid4()),
             created=now,
-            lastModified=now
+            last_modified=now
         )
 
         new_flow.save()

@@ -15,3 +15,12 @@ class JobPriority(Enum):
 class DecoratorMode(Enum):
     COMPILATION = auto()
     EXECUTION = auto()
+
+
+class TaskStatus(Enum):
+    CREATED = auto()
+    PENDING = auto()
+    STARTING = auto()
+    PROGRESS = auto()
+    COMPLETED = auto()
+    ERROR = auto()

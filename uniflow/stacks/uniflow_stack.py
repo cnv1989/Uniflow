@@ -11,13 +11,16 @@ from aws_cdk import aws_iam as iam_
 from aws_cdk import aws_dynamodb as dynamodb_
 from aws_cdk import aws_lambda_event_sources as lambda_event_sources_
 from aws_cdk import aws_apigateway as apigateway_
+from aws_cdk import aws_stepfunctions as sfn_
+from aws_cdk import aws_stepfunctions_tasks as sfn_tasks_
 from pathlib import Path
 
-from ..constants import JobPriority
+
 from uniflow.cdk import LAMBDA_RUNTIME
+from uniflow.docker.batch_container_image import BatchContainerImage
+from ..constants import JobPriority
 from ..cdk.flow_requirements import FlowRequirements
 from ..cdk.flow_code import FlowCode
-from uniflow.docker.batch_container_image import BatchContainerImage
 
 
 class UniflowStack(core.Stack):
@@ -43,9 +46,10 @@ class UniflowStack(core.Stack):
         self.__create_code_layer()
         self.__create_batch_container_image()
         self.__create_batch_infrastructure()
-        self.__create_task_executor_job_definition()
         self.__create_task_table()
         self.__create_flow_table()
+        self.__create_task_executor_job_definition()
+        self.__create_state_machine()
         self.__add_lambda_to_handle_task_table_events()
         self.__add_lambda_to_handle_flow_table_events()
         self.__create_rest_api()
@@ -106,6 +110,36 @@ class UniflowStack(core.Stack):
             index_name="FlowTableLocalIndexLastUpdated"
         )
 
+    def __add_iam_policy_to_lambda_function(self, lambda_function: lambda_.Function) -> None:
+        self.__add_ddb_policy_to_lambda_function(lambda_function)
+        self.__add_sfn_policy_to_lambda_function(lambda_function)
+
+    def __add_ddb_policy_to_lambda_function(self, lambda_function: lambda_.Function) -> None:
+        lambda_function.role.add_to_policy(
+            iam_.PolicyStatement(
+                effect=iam_.Effect.ALLOW,
+                resources=[
+                    self.__flow_table.table_arn,
+                    f"{self.__flow_table.table_arn}/index/*",
+                    self.__task_table.table_arn,
+                    f"{self.__task_table.table_arn}/index/*",
+                ],
+                actions=['dynamodb:*']
+
+            )
+        )
+
+    def __add_sfn_policy_to_lambda_function(self, lambda_function: lambda_.Function) -> None:
+        lambda_function.role.add_to_policy(
+            iam_.PolicyStatement(
+                effect=iam_.Effect.ALLOW,
+                resources=[
+                    self.__state_machine.state_machine_arn,
+                ],
+                actions=['states:*']
+            )
+        )
+
     def __add_lambda_to_handle_task_table_events(self) -> None:
         code = f"""
         from uniflow.lambda_handlers import TaskTableEventHandler
@@ -126,21 +160,10 @@ class UniflowStack(core.Stack):
                 "FLOW_NAME": self.__flow_name,
                 "FLOW_TABLE": self.__flow_table.table_name,
                 "TASK_TABLE": self.__task_table.table_name,
+                "TASK_EXECUTATION_STATE_MACHINE_ARN": self.__state_machine.state_machine_arn
             }
         )
-        lambda_function.role.add_to_policy(
-            iam_.PolicyStatement(
-                effect=iam_.Effect.ALLOW,
-                resources=[
-                    self.__flow_table.table_arn,
-                    f"{self.__flow_table.table_arn}/index/*",
-                    self.__task_table.table_arn,
-                    f"{self.__task_table.table_arn}/index/*",
-                ],
-                actions=['dynamodb:*']
-
-            )
-        )
+        self.__add_iam_policy_to_lambda_function(lambda_function)
         lambda_function.add_event_source(lambda_event_sources_.DynamoEventSource(
             self.__task_table,
             starting_position=lambda_.StartingPosition.LATEST
@@ -167,21 +190,10 @@ class UniflowStack(core.Stack):
                 "FLOW_NAME": self.__flow_name,
                 "FLOW_TABLE": self.__flow_table.table_name,
                 "TASK_TABLE": self.__task_table.table_name,
+                "TASK_EXECUTATION_STATE_MACHINE_ARN": self.__state_machine.state_machine_arn
             }
         )
-        lambda_function.role.add_to_policy(
-            iam_.PolicyStatement(
-                effect=iam_.Effect.ALLOW,
-                resources=[
-                    self.__flow_table.table_arn,
-                    f"{self.__flow_table.table_arn}/index/*",
-                    self.__task_table.table_arn,
-                    f"{self.__task_table.table_arn}/index/*",
-                ],
-                actions=['dynamodb:*']
-
-            )
-        )
+        self.__add_iam_policy_to_lambda_function(lambda_function)
         lambda_function.add_event_source(lambda_event_sources_.DynamoEventSource(
             self.__flow_table,
             starting_position=lambda_.StartingPosition.LATEST
@@ -209,19 +221,7 @@ class UniflowStack(core.Stack):
                 "TASK_TABLE": self.__task_table.table_name,
             }
         )
-        lambda_function.role.add_to_policy(
-            iam_.PolicyStatement(
-                effect=iam_.Effect.ALLOW,
-                resources=[
-                    self.__flow_table.table_arn,
-                    f"{self.__flow_table.table_arn}/index/*",
-                    self.__task_table.table_arn,
-                    f"{self.__task_table.table_arn}/index/*",
-                ],
-                actions=['dynamodb:*']
-
-            )
-        )
+        self.__add_iam_policy_to_lambda_function(lambda_function)
         self.__rest_api = apigateway_.LambdaRestApi(
             self,
             f"{self.__id}_Api",
@@ -237,7 +237,10 @@ class UniflowStack(core.Stack):
             job_role=self.__job_definition_role,
             environment={
                 "FLOW": self.__flow_name,
-                "FLOW_DATASTORE": self.__datastore.bucket_name
+                "FLOW_DATASTORE": self.__datastore.bucket_name,
+                "FLOW_TABLE": self.__flow_table.table_name,
+                "TASK_TABLE": self.__task_table.table_name,
+                "AWS_REGION": self.region
             }
         )
 
@@ -286,7 +289,10 @@ class UniflowStack(core.Stack):
             self,
             f"{self.__id}_BatchJobDefinitionRole",
             assumed_by=iam_.ServicePrincipal("ecs-tasks.amazonaws.com"),
-            managed_policies=[iam_.ManagedPolicy.from_aws_managed_policy_name("AWSBatchFullAccess")]
+            managed_policies=[
+                iam_.ManagedPolicy.from_aws_managed_policy_name("AWSBatchFullAccess"),
+                iam_.ManagedPolicy.from_aws_managed_policy_name("AmazonDynamoDBFullAccess")
+            ]
         )
         self.__datastore.grant_read_write(self.__job_definition_role)
 
@@ -328,3 +334,157 @@ class UniflowStack(core.Stack):
             self.batch_container_image.repository_arn
         )
 
+    def __create_get_task_status_step(self) -> sfn_.Task:
+        code = f"""
+        from uniflow.models.task_model import TaskModel
+        
+        def handler(event, context):
+            task = TaskModel.get_from_sfn_input(event)
+            return task.get_status()
+        """
+        lambda_function = lambda_.Function(
+            self,
+            f"{self.__id}_GetTaskStatus",
+            layers=[self.__requirements_layer, self.__code_layer],
+            runtime=LAMBDA_RUNTIME,
+            code=lambda_.InlineCode(textwrap.dedent(code)),
+            handler="index.handler",
+            timeout=core.Duration.minutes(15),
+            environment={
+                "FLOW_NAME": self.__flow_name,
+                "FLOW_TABLE": self.__flow_table.table_name,
+                "TASK_TABLE": self.__task_table.table_name
+            }
+        )
+        self.__lambda_functions.append(lambda_function)
+        self.__add_ddb_policy_to_lambda_function(lambda_function)
+
+        self.__get_task_status_step = sfn_tasks_.LambdaInvoke(
+            self,
+            f"{self.__id}GetTaskStatus",
+            lambda_function=lambda_function,
+            result_path="$.TaskStatus"
+        )
+
+    def __create_task_executor_step(self) -> sfn_.Task:
+        self.__task_executor_step = sfn_tasks_.BatchSubmitJob(
+            self,
+            f"{self.__id}SubmitBatchJob",
+            job_definition=self.__batch_job_definitions[f"{self.__id}_BatchTaskExecutorJobDef"],
+            job_queue=self.__high_priority_job_queue,
+            job_name="TaskExecutor",
+            payload=sfn_.TaskInput.from_object({
+                "task_name.$": "$.task_name",
+                "run_id.$": "$.run_id",
+                "flow_id.$": "$.flow_id"
+            }),
+            container_overrides=sfn_tasks_.BatchContainerOverrides(
+                command=["uniflow", "execute", "--task", "Ref::task_name", "--flow-id", "Ref::flow_id",  "--run-id", "Ref::run_id"]
+            ),
+            result_path="$.TaskExecutionResult"
+        ).next(
+            self.__task_completed_step
+        )
+
+    def __create_check_task_status_step(self) -> None:
+        self.__check_task_status_step = sfn_.Choice(
+            self,
+            f"{self.__id}CheckTaskParentStatus"
+        ).when(
+            sfn_.Condition.string_equals('$.TaskStatus.Payload.parent_status', 'COMPLETED'),
+            self.__task_executor_step
+        ).when(
+            sfn_.Condition.string_equals('$.TaskStatus.Payload.parent_status', 'PENDING'),
+            sfn_.Wait(
+                self,
+                f"{self.__id}WaitForParentTasksToComplete",
+                time=sfn_.WaitTime.duration(core.Duration.minutes(1))
+            ).next(
+                self.__get_task_status_step
+            )
+        ).otherwise(
+            self.__task_failed_step
+        )
+
+    def __create_task_completed_step(self) -> sfn_.Task:
+        code = f"""
+        from uniflow.models.task_model import TaskModel
+        from uniflow.constants import TaskStatus
+        
+        def handler(event, context):
+            task = TaskModel.get_from_sfn_input(event)
+            return task.update_task_status(TaskStatus.COMPLETED)
+        """
+        lambda_function = lambda_.Function(
+            self,
+            f"{self.__id}_TaskCompleted",
+            layers=[self.__requirements_layer, self.__code_layer],
+            runtime=LAMBDA_RUNTIME,
+            code=lambda_.InlineCode(textwrap.dedent(code)),
+            handler="index.handler",
+            timeout=core.Duration.minutes(15),
+            environment={
+                "FLOW_NAME": self.__flow_name,
+                "FLOW_TABLE": self.__flow_table.table_name,
+                "TASK_TABLE": self.__task_table.table_name
+            }
+        )
+        self.__lambda_functions.append(lambda_function)
+        self.__add_ddb_policy_to_lambda_function(lambda_function)
+
+        self.__task_completed_step = sfn_tasks_.LambdaInvoke(
+            self,
+            f"{self.__id}TaskCompleted",
+            lambda_function=lambda_function,
+            result_path="$.TaskCompleted"
+        )
+
+    def __create_task_failed_step(self) -> sfn_.Task:
+        code = f"""
+        from uniflow.models.task_model import TaskModel
+        from uniflow.constants import TaskStatus
+        
+        def handler(event, context):
+            task = TaskModel.get_from_sfn_input(event)
+            return task.update_task_status(TaskStatus.FAILED)
+        """
+        lambda_function = lambda_.Function(
+            self,
+            f"{self.__id}_TaskFailed",
+            layers=[self.__requirements_layer, self.__code_layer],
+            runtime=LAMBDA_RUNTIME,
+            code=lambda_.InlineCode(textwrap.dedent(code)),
+            handler="index.handler",
+            timeout=core.Duration.minutes(15),
+            environment={
+                "FLOW_NAME": self.__flow_name,
+                "FLOW_TABLE": self.__flow_table.table_name,
+                "TASK_TABLE": self.__task_table.table_name
+            }
+        )
+        self.__lambda_functions.append(lambda_function)
+        self.__add_ddb_policy_to_lambda_function(lambda_function)
+
+        self.__task_failed_step = sfn_tasks_.LambdaInvoke(
+            self,
+            f"{self.__id}TaskFailed",
+            lambda_function=lambda_function,
+            result_path="$.TaskFailed"
+        )
+
+    def __create_state_machine(self) -> sfn_.StateMachine:
+        self.__create_get_task_status_step()
+        self.__create_task_completed_step()
+        self.__create_task_failed_step()
+        self.__create_task_executor_step()
+        self.__create_check_task_status_step()
+
+        definition = self.__get_task_status_step\
+            .next(self.__check_task_status_step)
+
+        self.__state_machine = sfn_.StateMachine(
+            self,
+            id=self.__id,
+            definition=definition,
+            timeout=core.Duration.hours(24)
+        )

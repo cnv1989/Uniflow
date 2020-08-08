@@ -24,3 +24,5 @@ class TaskStatus(Enum):
     PROGRESS = auto()
     COMPLETED = auto()
     ERROR = auto()
+    FAILED = auto()
+    NOT_AVAILABLE = auto()

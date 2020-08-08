@@ -1,14 +1,8 @@
-import logging
+from .dynamodb_table_event_handler import DynamodbTableEventHandler
+from .task_record_handler import TaskRecordHandler
 
-logger = logging.getLogger(__name__)
 
-
-class TaskTableEventHandler(object):
-
-    def __init__(self, event: dict, context: dict) -> None:
-        self.__event = event
-        self.__context = context
-
+class TaskTableEventHandler(DynamodbTableEventHandler):
     def execute(self):
-        logger.info("Hello World!")
-        return self.__event
+        for record in self.records:
+            TaskRecordHandler(record).process()

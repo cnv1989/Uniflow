@@ -3,15 +3,12 @@
 import click
 import os
 import subprocess
-import boto3
 import logging
 import shutil
 import json
-import importlib
 
 from pathlib import Path
 from uniflow.utils import get_flow_class_from_flow
-from uniflow.client.api_client import ApiClient
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -97,22 +94,24 @@ def deploy():
 @cli.command()
 @click.argument("flow", envvar='FLOW')
 @click.option("--task", envvar='TASK')
-@click.option("--run-id", help="ID identifying the unique execution of the flow")
-@click.option("--local", is_flag=True)
-def execute(flow, task, run_id, local):
+@click.option("--flow-id", help="ID identifying the unique execution of the flow", envvar='FLOW_ID')
+@click.option("--run-id", help="ID identifying the unique execution of the flow", envvar='RUN_ID')
+@click.option("--local", is_flag=False)
+def execute(flow, task, flow_id, run_id, local):
     if task and not run_id:
         click.echo("Missing run_id to execute a task.")
     elif not task and run_id:
         click.echo("Missing task to execute a particular run again.")
     else:
         flow_class = get_flow_class_from_flow(flow)
-        task_manager = getattr(flow_class, task)(run_id=run_id, local=local)
+        task_manager = getattr(flow_class, task)(flow_id=flow_id, run_id=run_id, local=local)
         task_manager.execute_task()
 
 
 @cli.command()
 @click.argument("flow", envvar='FLOW')
 def start(flow):
+    from uniflow.client.api_client import ApiClient
     _, stack_name = flow.rsplit(".", 1)
     client = ApiClient(stack_name)
     client.start_flow()

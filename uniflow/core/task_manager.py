@@ -3,6 +3,7 @@ import boto3
 import logging
 import pickle
 
+from ..models.task_model import TaskModel
 from ..decorators.task import Task
 
 
@@ -12,14 +13,20 @@ logger = logging.getLogger(__name__)
 class TaskManager(object):
     s3_resource = boto3.resource('s3')
 
-    def __init__(self, task: Task, run_id: str, local: bool = False) -> None:
+    def __init__(self, task: Task, flow_id: str, run_id: str, local: bool = False) -> None:
         self.__task = task
+        self.__flow_id = flow_id
         self.__run_id = run_id
+        self.__task_item = TaskModel.get(self.task.name, self.run_id)
         self.local = local
 
     @property
     def task(self):
         return self.__task
+
+    @property
+    def flow_id(self):
+        return self.__flow_id
 
     @property
     def run_id(self):
@@ -30,11 +37,15 @@ class TaskManager(object):
         return os.environ['FLOW_DATASTORE']
 
     @property
-    def task_object(self) -> str:
-        return f"{os.environ['FLOW']}/{self.task.name}/{self.__run_id}/result.pkl"
+    def task_item(self) -> TaskModel:
+        return self.__task_item
 
-    def __get_s3_key_for_parent_task_result(self, task):
-        return f"{os.environ['FLOW']}/{task}/{self.__run_id}/result.pkl"
+    @property
+    def task_object(self) -> str:
+        return f"{os.environ['FLOW']}/{self.flow_id}/{self.task.name}/{self.__run_id}/result.pkl"
+
+    def __get_s3_key_for_parent_task_result(self, parent_task: TaskModel) -> str:
+        return f"{os.environ['FLOW']}/{self.flow_id}/{parent_task.task_name}/{parent_task.run_id}/result.pkl"
 
     def __get_parent_task_result_from_s3(self, task: str) -> object:
         logger.info(f"Loading parent_task={task} output from datastore for run_id={self.__run_id}.")
@@ -42,10 +53,10 @@ class TaskManager(object):
         return pickle.loads(obj.get()['Body'].read())
 
     def __get_parent_tasks_outputs(self) -> [object]:
-        logger.info(f"Loading parent task outputs from datastore for run_id={self.__run_id}.")
+        logger.info(f"Loading parent task outputs from datastore.")
         parent_results = []
-        for parent in self.task.dependencies:
-            parent_results.append(self.__get_parent_task_result_from_s3(parent))
+        for parent_task in self.task_item.parent_tasks:
+            parent_results.append(self.__get_parent_task_result_from_s3(parent_task))
         return parent_results
 
     def __save_task_output(self, ret) -> None:

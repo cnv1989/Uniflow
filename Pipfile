@@ -47,6 +47,7 @@ aws-cdk-aws-apigateway = "==1.54.0"
 requests = "*"
 "aws-cdk.aws-stepfunctions" = "==1.54.0"
 "aws-cdk.aws-stepfunctions-tasks" = "==1.54.0"
+numpy = "*"
 
 [requires]
 python_version = "3.7"

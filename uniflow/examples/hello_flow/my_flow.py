@@ -1,5 +1,5 @@
 import logging
-
+import numpy as np
 from uniflow import Uniflow
 from uniflow.decorators import task
 
@@ -9,27 +9,25 @@ logger = logging.getLogger(__name__)
 class MyFlow(Uniflow):
 
     @task
-    def task1():
-        return "Task 1"
+    def init_numpy_array():
+        return np.random.rand(3, 2)
 
-    @task(depends_on=["task1"])
-    def task2(task1):
-        logger.info(f"Parent Task Results: task1={task1}")
-        return "Task 2"
-
-    @task(depends_on=["task2"])
-    def task3(task2):
-        return "Task 3"
-
+    @task(depends_on=["init_numpy_array"])
+    def multiply_by_10(numpy_array):
+        return numpy_array*10
+        
     @task
-    def task4():
-        return "Task 4"
+    def init_another_numpy_array():
+        return np.random.rand(3, 2)
 
-    @task(depends_on=["task3", "task4"])
-    def task5(task3, task4):
-        logger.info(f"Parent Task Results: task3={task3}, task4={task4}")
-        return "Task 5"
+    @task(depends_on=["init_another_numpy_array"])
+    def square_matrix(arr):
+        return arr*arr
 
-    @task(depends_on=["task5"])
-    def task6(task5):
-        return "Task 6"
+    @task(depends_on=["multiply_by_10", "init_another_numpy_array", "square_matrix"])
+    def add_all_arrays(arr1, arr2, arr3):
+        return arr1 + arr2 + arr3
+
+    @task(depends_on=["add_all_arrays"])
+    def divide_by_10(arr):
+        return arr/10

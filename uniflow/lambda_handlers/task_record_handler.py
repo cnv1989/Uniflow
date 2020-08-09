@@ -33,10 +33,11 @@ class TaskRecordHandler(object):
     @property
     def task_name(self) -> str:
         return self.__record['dynamodb']['NewImage']['TaskName']['S']
+        
 
     @property
     def execution_name(self) -> str:
-        return f"{self.task_name}_{self.flow_id}_{self.run_id}"
+        return f"{self.task_name}_{self.flow_id.split('-')[0]}_{self.run_id.split('-')[0]}"
 
     @property
     def sfn_input(self) -> dict:

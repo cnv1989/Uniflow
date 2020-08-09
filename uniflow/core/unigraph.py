@@ -42,21 +42,21 @@ class Unigraph(object):
                 edge_nodes.append(node)
         return edge_nodes
 
-    def __check_for_cycle(self, node: AbstractNode, visitation_map: {str: bool}) -> None:
-        if visitation_map[node.name]:
+    def __check_for_cycle(self, node: AbstractNode, visitation_map: {str: bool}, visited_from: AbstractNode) -> None:
+        if visitation_map[node.name] and visitation_map[visited_from.name] == node.name:
             raise Exception(f"Found cycle at node {node.name}")
 
-        visitation_map[node.name] = True
+        visitation_map[node.name] = visited_from.name
 
         for child in node.children:
-            self.__check_for_cycle(child, visitation_map)
+            self.__check_for_cycle(child, visitation_map, node)
 
     def __check_for_cycles(self):
         for edge_node in self.get_edge_nodes():
             visitation_map = {}
             for key, node in self.__nodes.items():
-                visitation_map[key] = False
-            self.__check_for_cycle(edge_node, visitation_map)
+                visitation_map[key] = None
+            self.__check_for_cycle(edge_node, visitation_map, edge_node)
 
     def __dfs(self, node: AbstractNode, visitation_map: {str: bool}) -> None:
         visitation_map[node.name] = True
